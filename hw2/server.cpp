@@ -12,6 +12,9 @@
 #include<map>
 #include<vector>
 #include<sstream>
+#include<iomanip>
+#include<ctime>
+#include<chrono>
 
 using namespace std;
 
@@ -35,46 +38,56 @@ string comment_format = "comment <post-id> <comment>\n";
 string not_login = "Please login first.\n";
 
 // Database callback function
-static int callback(void *enter, int argc, char **argv, char **colname) {
+static int DB_check_enter(void *enter, int argc, char **argv, char **colname) {
 	*(bool*)enter = true; 
-	for(int i=0; i<argc; i++) {
-		cerr << argv[i] << ' ';
-	}
-	cerr << '\n';
+
 	return 0;
 }
-static int callback2(void *fd, int argc, char **argv, char **colname) {
+
+static int DB_list_data(void *fd, int argc, char **argv, char **colname) {
 	pair<int, bool>* fd_enter= (pair<int, bool>*)fd;
 
-	if (fd_enter->second == false) {
-		// string col_n = "Index\tName\tModerator\n";
-		string col_n;
-		for(int i=0; i<argc; i++) {
-			col_n += colname[i];
-			col_n += '\t';
-		}
-		col_n += '\n';
-		send(fd_enter->first, col_n.c_str(), col_n.size(), 0);
-	}
+	// if (fd_enter->second == false) {
+	// 	// string col_n = "Index\tName\tModerator\n";
+	// 	string col_n;
+	// 	for(int i=0; i<argc; i++) {
+	// 		col_n += colname[i];
+	// 		col_n += '\t';
+	// 	}
+	// 	col_n += '\n';
+	// 	send(fd_enter->first, col_n.c_str(), col_n.size(), 0);
+	// }
 	// set enter = true
 	fd_enter->second = true;
 	
 	string s;
+	int lens;
 	for(int i=0; i<argc; i++) {
-		s += string(argv[i]); 
-		s += "\t";
+		string arg = string(argv[i]);
+
+		if (string(colname[i]) == "DATE") {
+			arg = arg.substr(5);
+			arg.replace(2, 1, "/");
+		}
+		s += arg; 
+		lens = 10 - arg.size();
+		while(lens > 0) {
+			s += ' ';
+			lens--;
+		}
+		// s += "\t";
 	}
 	s += '\n';
 	send(fd_enter->first, s.c_str(), s.size(), 0);
 	return 0;
 }
-static int callback3(void *fd, int argc, char **argv, char **colname) {
+static int DB_read_posts(void *fd, int argc, char **argv, char **colname) {
 	pair<int, bool>* fd_enter= (pair<int, bool>*)fd;
 
 	// set enter = true
 	fd_enter->second = true;
 	string s;
-	string ff[5] = {"Author\t:", "Title\t:", "Date\t:", "--\n", "--\n"};
+	string ff[5] = {"Author   :", "Title    :", "Date     :", "--\n", "--\n"};
 	for(int i=0; i<argc; i++) {
 		s += ff[i];
 		s += string(argv[i]);
@@ -85,79 +98,93 @@ static int callback3(void *fd, int argc, char **argv, char **colname) {
 }
 
 void print_welcome(int fd) {
-	send(fd, welcome_buf.c_str(), welcome_buf.size(), 0);
+	
 }
 
-void register_(int sockfd, string user, string email, string password) {
-	int i = sockfd;
+void register_(int sockfd, vector<string> &argu) {
+	if(argu.size() != 4) {
+		send(sockfd, register_format.c_str(), register_format.size(), 0);
+		return;
+	}
 
+	string user = argu[1], email = argu[2], password = argu[3];
 	string cmd = "INSERT INTO USERS (USERNAME, EMAIL, PASSWORD) VALUES (\'" + user + "\', " + "\'" + email + "\', " + "\'"+ password + "\');";
 
-	int st = sqlite3_exec(db, cmd.c_str(), callback, 0, 0);
+	int st = sqlite3_exec(db, cmd.c_str(), DB_check_enter, 0, 0);
 	if ( st != SQLITE_OK ) {
-		char tmp[] = "Username is already used.\n";
-		send(i, tmp, strlen(tmp), 0);
+		string tmp = "Username is already used.\n";
+		send(sockfd, tmp.c_str(), tmp.size(), 0);
 	}
 	else {
-		char tmp[] = "Register successfully.\n";
-		send(i, tmp, strlen(tmp), 0);
+		string tmp = "Register successfully.\n";
+		send(sockfd, tmp.c_str(), tmp.size(), 0);
 	}		
-
 }
 
-void login(int sockfd, string usern, string password) {
-	int i = sockfd;
-	
+void login(int sockfd, vector<string> &argu) {
+	if(argu.size() != 3) {
+		send(sockfd, login_format.c_str(), login_format.size(), 0);
+		return;
+	}
+
+	string usern = argu[1], password = argu[2];
 	string cmd = "SELECT * FROM USERS WHERE USERNAME= '" + usern + 
 				"' AND PASSWORD= '" + password + "';";
 	bool enter = false;
-	int st = sqlite3_exec(db, cmd.c_str(), callback, (void*)&enter, 0);
+	int st = sqlite3_exec(db, cmd.c_str(), DB_check_enter, (void*)&enter, 0);
 
-	if ( online.find(i) != online.end() ) {
+	if ( online.find(sockfd) != online.end() ) {
 		//has already login
 		char tmp[] = "Please logout first.\n";
-		send(i, tmp, strlen(tmp), 0);
+		send(sockfd, tmp, strlen(tmp), 0);
 	}
 	else {
 		if ( !enter ) {
 			// can't find
 			string tmp = "Login failed.\n";
-			send(i, tmp.c_str(), tmp.size(), 0);
+			send(sockfd, tmp.c_str(), tmp.size(), 0);
 		}
 		else {
 			string tmp = "Welcome, " + usern + '\n';
-			online[i] = usern;
-			send(i, tmp.c_str(), tmp.size(), 0);
+			online[sockfd] = usern;
+			send(sockfd, tmp.c_str(), tmp.size(), 0);
 		}
 	}
 	
 }
 
-void logout(int sockfd) {
-	int i = sockfd;
-
-	if (online.find(i) != online.end()) {
-		string tmp = "Bye, " + online[i] + '\n';
-		online.erase(i);
-		send(i, tmp.c_str(), tmp.size(), 0);
+void logout(int sockfd, vector<string> &argu) {
+	if (argu.size() != 1) {
+		string tmp = "logout\n";
+		send(sockfd, tmp.c_str(), tmp.size(), 0);	
+		return;
+	}
+	if (online.find(sockfd) != online.end()) {
+		string tmp = "Bye, " + online[sockfd] + '\n';
+		online.erase(sockfd);
+		send(sockfd, tmp.c_str(), tmp.size(), 0);
 	}
 	else {
 		string tmp = "Please login first.\n";
-		send(i, tmp.c_str(), tmp.size(), 0);
+		send(sockfd, tmp.c_str(), tmp.size(), 0);
 	}
 	
 }
 
-void whoami(int sockfd) {
-	int i = sockfd;
+void whoami(int sockfd, vector<string> &argu) {
+	if (argu.size() != 1) {
+		string tmp = "whoami\n";
+		send(sockfd, tmp.c_str(), tmp.size(), 0);
+		return;
+	}
 
-	if (online.find(i) != online.end()) {
-		string tmp = online[i] + '\n';
-		send(i, tmp.c_str(), tmp.size(), 0);
+	if (online.find(sockfd) != online.end()) {
+		string tmp = online[sockfd] + '\n';
+		send(sockfd, tmp.c_str(), tmp.size(), 0);
 	}
 	else {
 		string tmp = "Please login first.\n";
-		send(i, tmp.c_str(), tmp.size(), 0);
+		send(sockfd, tmp.c_str(), tmp.size(), 0);
 	}
 
 }
@@ -165,14 +192,19 @@ void whoami(int sockfd) {
 // hw2 new functions
 
 
-void create_board(int sockfd, string name) {
-
+void create_board(int sockfd, vector<string> &argu) {
+	if (argu.size() != 2) {
+		send(sockfd, create_board_format.c_str(), create_board_format.size(), 0);
+		return;
+	}
+	
+	string name = argu[1];
 	if (online.find(sockfd) != online.end()) {
 		// TODO: check duplicate boards	
 		// string cmd = "INSERT INTO USERS (USERNAME, EMAIL, PASSWORD) VALUES (\'" + user + "\', " + "\'" + email + "\', " + "\'"+ password + "\');";
 		string user_name = online[sockfd];
 		string find_board = "INSERT INTO BOARDS (NAME, MODERATOR) VALUES ('" + name + "', '" + user_name + "');"; 
-		int st = sqlite3_exec(db, find_board.c_str(), callback, 0, 0);
+		int st = sqlite3_exec(db, find_board.c_str(), DB_check_enter, 0, 0);
 		
 		if (st != SQLITE_OK) {
 			// already used
@@ -191,16 +223,7 @@ void create_board(int sockfd, string name) {
 }
 
 void create_post(int sockfd, vector<string> &argu) {
-	string user_name;
-	// check login
-	if (online.find(sockfd) != online.end()) {
-		user_name = online[sockfd];
-	}
-	else {
-		send(sockfd, not_login.c_str(), not_login.size(), 0);
-		return;
-	}
-
+	
 	string board_name, title, content;
 	bool format = false;
 	int content_idx = 1e9;
@@ -250,22 +273,36 @@ void create_post(int sockfd, vector<string> &argu) {
 		send(sockfd, create_post_format.c_str(), create_post_format.size(), 0);
 		return;
 	}
-	// TODO: stroe posts information
-	
+	string user_name;
+	// check login
+	if (online.find(sockfd) != online.end()) {
+		user_name = online[sockfd];
+	}
+	else {
+		send(sockfd, not_login.c_str(), not_login.size(), 0);
+		return;
+	}
+	// deal with time
+	auto now = chrono::system_clock::now();
+	auto in_time_t = chrono::system_clock::to_time_t(now);
+
+	stringstream ss;
+	string date_;
+    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d");
+	ss >> date_;
+
 	string find_board = "SELECT * FROM BOARDS WHERE NAME='" + board_name + "';";
 	bool enter = false;
-	sqlite3_exec(db, find_board.c_str(), callback, (void*)(&enter), 0);
+	sqlite3_exec(db, find_board.c_str(), DB_check_enter, (void*)(&enter), 0);
 	if ( !enter ) {
 		// can't find
 		string wan = "Board does not exist.\n";
 		send(sockfd, wan.c_str(), wan.size(), 0);
 	}
 	else {
-		// string find_board = "INSERT INTO BOARDS (NAME, MODERATOR) VALUES ('" + name + ", " + user_name + ");"; 
-
 		string add_post = "INSERT INTO POSTS (BOARD_NAME, TITLE, AUTHOR, DATE, CONTENT, COMMENT)"\
-						  "VALUES ('" + board_name + "', '" + title + "', '" + user_name + "', '" + /*date*/ + "', '" + content + "', '');";
-		sqlite3_exec(db, add_post.c_str(), callback, 0, 0);
+						  "VALUES ('" + board_name + "', '" + title + "', '" + user_name + "', '" + date_ + "', '" + content + "', '');";
+		sqlite3_exec(db, add_post.c_str(), DB_check_enter, 0, 0);
 		string wan = "Create post successfully.\n";
 		send(sockfd, wan.c_str(), wan.size(), 0);
 	}
@@ -293,13 +330,17 @@ void list_board(int sockfd, vector<string> &argu) {
 	if( key.empty() ) {
 		string list_all_boards = "SELECT * FROM BOARDS;";
 		pair<int, bool> fd_enter = {sockfd, false};
-		sqlite3_exec(db, list_all_boards.c_str(), callback2, (void*)&fd_enter, 0);
+		string indexes = "Index     Name      Moderator \n";
+		send(sockfd, indexes.c_str(), indexes.size(), 0);
+		sqlite3_exec(db, list_all_boards.c_str(), DB_list_data, (void*)&fd_enter, 0);
 	}
 	else {
 		// advanced search
 		string list_key_boards = "SELECT * FROM BOARDS WHERE NAME LIKE '%" + key + "%';";
 		pair<int, bool> fd_enter = {sockfd, false};
-		sqlite3_exec(db, list_key_boards.c_str(), callback2, (void*)&fd_enter, 0);
+		string indexes = "ID        Title     Author    Date      \n";
+		send(sockfd, indexes.c_str(), indexes.size(), 0);
+		sqlite3_exec(db, list_key_boards.c_str(), DB_list_data, (void*)&fd_enter, 0);
 	}
 
 }
@@ -325,18 +366,18 @@ void list_post(int sockfd, vector<string> &argu) {
 	}
 	board_name = argu[1];
 
-	// TODO: list posts
 	pair<int, bool> fd_enter = {sockfd, false};
 
+	// Question: key have space?
 	if (key.empty()) {
 		string list_key_posts = "SELECT POST_ID, TITLE, AUTHOR, DATE FROM POSTS WHERE BOARD_NAME='" + board_name + "';";
 
-		sqlite3_exec(db, list_key_posts.c_str(), callback2, (void*)&fd_enter, 0);
+		sqlite3_exec(db, list_key_posts.c_str(), DB_list_data, (void*)&fd_enter, 0);
 	}
 	else {
 		string list_key_posts = "SELECT POST_ID, TITLE, AUTHOR, DATE FROM POSTS WHERE BOARD_NAME='" + board_name + "' AND TITLE LIKE '%" + key + "%';";
 
-		sqlite3_exec(db, list_key_posts.c_str(), callback2, (void*)&fd_enter, 0);
+		sqlite3_exec(db, list_key_posts.c_str(), DB_list_data, (void*)&fd_enter, 0);
 	}
 	if(fd_enter.second == false) {
 		string no_board = "Board does not exist.\n";
@@ -354,7 +395,7 @@ void read_(int sockfd, vector<string> &argu) {
 	string read_post = "SELECT AUTHOR, TITLE, DATE, CONTENT, COMMENT FROM POSTS WHERE POST_ID=" + post_id + ";";
 	pair<int, bool> fd_enter = {sockfd, false};
 	
-	sqlite3_exec(db, read_post.c_str(), callback3, (void*)&fd_enter, 0);
+	sqlite3_exec(db, read_post.c_str(), DB_read_posts, (void*)&fd_enter, 0);
 	if (fd_enter.second == false) {
 		string no_posts = "Post does not exist.\n";
 		send(sockfd, no_posts.c_str(), no_posts.size(), 0);
@@ -377,19 +418,19 @@ void delete_post(int sockfd, vector<string> &argu) {
 	
 	string check_autho = "SELECT * FROM POSTS WHERE POST_ID=" + post_id + ";";
 	bool enter = false;
-	sqlite3_exec(db, check_autho.c_str(), callback, (void*)&enter, 0);
+	sqlite3_exec(db, check_autho.c_str(), DB_check_enter, (void*)&enter, 0);
 
 	if(enter) {
 		string check_post = "SELECT * FROM POSTS WHERE POST_ID=" + post_id + " AND AUTHOR='" + user_name + "';";
 		bool enter2 = false;
-		sqlite3_exec(db, check_post.c_str(), callback, (void*)&enter2, 0);
+		sqlite3_exec(db, check_post.c_str(), DB_check_enter, (void*)&enter2, 0);
 		if (!enter2) {
 			string no_autho = "Not the post owner\n";
 			send(sockfd, no_autho.c_str(), no_autho.size(), 0);
 		}
 		else {
 			string del_post = "DELETE FROM POSTS WHERE POST_ID=" + post_id + " AND AUTHOR='" + user_name + "';";
-			sqlite3_exec(db, del_post.c_str(), callback, 0, 0);
+			sqlite3_exec(db, del_post.c_str(), DB_check_enter, 0, 0);
 
 			string succ = "Delete successfully\n";
 			send(sockfd, succ.c_str(), succ.size(), 0);
@@ -424,9 +465,20 @@ void update_post(int sockfd, vector<string> &argu) {
 	}
 	string post_id = argu[1];
 	string new_content;
+	// may have <br>
 	for(int i=3; i<argu.size(); i++) {
 		if (i>3)
 			new_content += ' ';
+		// check <br>
+		size_t pos = 0;
+		while(1) {
+			pos = argu[i].find("<br>", pos);
+			if (pos != string::npos) {
+				argu[i].replace(pos, 4, "\n");
+			}
+			else	
+				break;
+		}
 		new_content += argu[i];
 	}
 
@@ -441,16 +493,16 @@ void update_post(int sockfd, vector<string> &argu) {
 	
 	string check_autho = "SELECT * FROM POSTS WHERE POST_ID=" + post_id + ";";
 	bool enter_inner = false;
-	sqlite3_exec(db, check_autho.c_str(), callback, (void*)&enter_inner, 0);
+	sqlite3_exec(db, check_autho.c_str(), DB_check_enter, (void*)&enter_inner, 0);
 
 	if(enter_inner) {
 		string check_upd = "SELECT * FROM POSTS WHERE POST_ID=" + post_id + " AND AUTHOR='" + user_name + "';";
 		bool enter3 = false;
-		sqlite3_exec(db, check_upd.c_str(), callback, (void*)&enter3, 0);
+		sqlite3_exec(db, check_upd.c_str(), DB_check_enter, (void*)&enter3, 0);
 		if (enter3) {
 			string upd_post = "UPDATE POSTS SET "+ item + " = '" + new_content + "' WHERE POST_ID=" + post_id + " AND AUTHOR='" + user_name + "';";
-			sqlite3_exec(db, upd_post.c_str(), callback, 0, 0);
-			
+			sqlite3_exec(db, upd_post.c_str(), DB_check_enter, 0, 0);
+
 			string succ = "Update successfully\n";
 			send(sockfd, succ.c_str(), succ.size(), 0);
 		}
@@ -465,7 +517,8 @@ void update_post(int sockfd, vector<string> &argu) {
 	}
 
 }
-
+// comment have no <br>
+// Question: not print "index"
 void comment(int sockfd, vector<string> &argu) {
 	if (argu.size() < 3) {
 		send(sockfd, comment_format.c_str(), comment_format.size(), 0);
@@ -483,7 +536,7 @@ void comment(int sockfd, vector<string> &argu) {
 	string post_id = argu[1];
 	string check_exist = "SELECT * FROM POSTS WHERE POST_ID=" + post_id + ";";
 	bool enter = false;
-	sqlite3_exec(db, check_exist.c_str(), callback, (void*)&enter, 0);
+	sqlite3_exec(db, check_exist.c_str(), DB_check_enter, (void*)&enter, 0);
 	if (!enter) {
 		string not_exist = "Post does not exist.\n";
 		send(sockfd, not_exist.c_str(), not_exist.size(), 0);
@@ -501,7 +554,7 @@ void comment(int sockfd, vector<string> &argu) {
 	comment = user_name + ": " + comment + "\n";
 	// TODO: ADD new comment 
 	string add_new_comment = "UPDATE POSTS SET COMMENT = COMMENT || '" + comment + "' WHERE POST_ID=" + post_id +";";
-	sqlite3_exec(db, add_new_comment.c_str(), callback, 0, 0);
+	sqlite3_exec(db, add_new_comment.c_str(), DB_check_enter, 0, 0);
 
 	string succ_upd = "Comment successfully\n";
 	send(sockfd, succ_upd.c_str(), succ_upd.size(), 0);
@@ -545,9 +598,9 @@ int main(int argc, char *argv[]) {
 						 "CONTENT TEXT NOT NULL,"\
 						 "COMMENT TEXT);";
 	// Create Table
-	st = sqlite3_exec(db, user_table.c_str(), callback, 0, 0);
-	st = sqlite3_exec(db, board_table.c_str(), callback, 0, 0);
-	st = sqlite3_exec(db, posts_table.c_str(), callback, 0, 0);
+	st = sqlite3_exec(db, user_table.c_str(), DB_check_enter, 0, 0);
+	st = sqlite3_exec(db, board_table.c_str(), DB_check_enter, 0, 0);
+	st = sqlite3_exec(db, posts_table.c_str(), DB_check_enter, 0, 0);
 
 	if (st!=SQLITE_OK) {
 		printf("CREATE TABLE ERROR\n");
@@ -612,7 +665,7 @@ int main(int argc, char *argv[]) {
 						fdmax = new_fd;
 					}
 					cout << "New connection\n";
-					print_welcome(new_fd);
+					send(new_fd, welcome_buf.c_str(), welcome_buf.size(), 0);
 					send(new_fd, "% ", 2, 0);
 				}
 				// clients has something new -> new input from client
@@ -631,13 +684,10 @@ int main(int argc, char *argv[]) {
 						FD_CLR(i, &master);
 					}
 					else {
-						// string argu[100];
 						vector<string> argu;
-						// int len = 0;
 						string buffer = string(buf), tmps;
 						stringstream ss(buffer);
 						while(ss >> tmps) {
-							// argu[len++] = tmps;
 							argu.push_back(tmps);
 						}
 						if (argu.empty()) {
@@ -646,32 +696,16 @@ int main(int argc, char *argv[]) {
 						}
 
 						if ( argu[0] == "register") {
-							if (argu.size() != 4) 
-								send(i, register_format.c_str(), register_format.size(), 0);
-							else
-								register_(i, argu[1], argu[2], argu[3]);
+							register_(i, argu);
 						}
 						else if( argu[0] == "login") {
-							if (argu.size() != 3) 
-								send(i, login_format.c_str(), login_format.size(), 0);
-							else
-								login(i, argu[1], argu[2]);
+							login(i, argu);
 						}
 						else if( argu[0] == "logout") {
-							if (argu.size() != 1) {
-								string tmp = "logout\n";
-								send(i, tmp.c_str(), tmp.size(), 0);	
-							}
-							else
-								logout(i);
+							logout(i, argu);
 						}
 						else if( argu[0] == "whoami") {
-							if (argu.size() != 1) {
-								string tmp = "whoami\n";
-								send(i, tmp.c_str(), tmp.size(), 0);
-							}
-							else
-								whoami(i);
+							whoami(i, argu);
 						}
 						else if( argu[0] == "exit") {
 							if (argu.size() != 1) {
@@ -686,10 +720,8 @@ int main(int argc, char *argv[]) {
 						}
 						// homework2 add new function
 						else if( argu[0] == "create-board") {
-							if (argu.size() != 2) 
-								send(sockfd, create_board_format.c_str(), create_board_format.size(), 0);
-							else
-								create_board(i, argu[1]);
+							
+							create_board(i, argu);
 						}
 						else if( argu[0] == "create-post") {
 							create_post(i, argu);
