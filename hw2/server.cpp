@@ -47,17 +47,6 @@ static int DB_check_enter(void *enter, int argc, char **argv, char **colname) {
 static int DB_list_data(void *fd, int argc, char **argv, char **colname) {
 	pair<int, bool>* fd_enter= (pair<int, bool>*)fd;
 
-	// if (fd_enter->second == false) {
-	// 	// string col_n = "Index\tName\tModerator\n";
-	// 	string col_n;
-	// 	for(int i=0; i<argc; i++) {
-	// 		col_n += colname[i];
-	// 		col_n += '\t';
-	// 	}
-	// 	col_n += '\n';
-	// 	send(fd_enter->first, col_n.c_str(), col_n.size(), 0);
-	// }
-	// set enter = true
 	fd_enter->second = true;
 	
 	string s;
@@ -191,7 +180,6 @@ void whoami(int sockfd, vector<string> &argu) {
 
 // hw2 new functions
 
-
 void create_board(int sockfd, vector<string> &argu) {
 	if (argu.size() != 2) {
 		send(sockfd, create_board_format.c_str(), create_board_format.size(), 0);
@@ -200,8 +188,6 @@ void create_board(int sockfd, vector<string> &argu) {
 	
 	string name = argu[1];
 	if (online.find(sockfd) != online.end()) {
-		// TODO: check duplicate boards	
-		// string cmd = "INSERT INTO USERS (USERNAME, EMAIL, PASSWORD) VALUES (\'" + user + "\', " + "\'" + email + "\', " + "\'"+ password + "\');";
 		string user_name = online[sockfd];
 		string find_board = "INSERT INTO BOARDS (NAME, MODERATOR) VALUES ('" + name + "', '" + user_name + "');"; 
 		int st = sqlite3_exec(db, find_board.c_str(), DB_check_enter, 0, 0);
