@@ -9,8 +9,9 @@ string create_board(int sockfd, vector<string> &argu) {
 	}
 	
 	string user_name;
-    if ( !check_online(sockfd, user_name, ret) )
-        return ret;
+    if ( !check_online(sockfd, user_name, ret) ) {
+    	return ret;
+	}
 	
 	string name = argu[1];
 	string find_board = "INSERT INTO BOARDS (NAME, MODERATOR) VALUES ('" + name + "', '" + user_name + "');"; 
@@ -113,7 +114,10 @@ string create_post(int sockfd, vector<string> &argu) {
 		string add_post = "INSERT INTO POSTS (BOARD_NAME, TITLE, AUTHOR, DATE)"\
 						  "VALUES ('" + board_name + "', '" + title + "', '" + user_name + "', '" + date_ + "');";
 		sqlite3_exec(db, add_post.c_str(), DB_check_enter, 0, 0);
+		postid_name[POST_ID] = user_name;
+
 		POST_ID++;
+
 		string wan = "Create post successfully.\n";
 		ret += wan;
 		// send(sockfd, wan.c_str(), wan.size(), 0);
@@ -371,29 +375,29 @@ string update_post(int sockfd, vector<string> &argu) {
 }
 // comment have no <br>
 // Question: not print "index"
-pair<string, string> comment(int sockfd, vector<string> &argu) {
-	string ret, post_user;
+string comment(int sockfd, vector<string> &argu) {
+	string ret;
 	if (argu.size() < 3) {
 		ret += comment_format;
 		// send(sockfd, comment_format.c_str(), comment_format.size(), 0);
-		return {ret, post_user};
+		return ret;
 	}
 	string user_name;
 
 	if ( !check_online(sockfd, user_name, ret) )
-        return {ret, post_user};
+        return ret;
 
 	string post_id = argu[1];
 	string check_exist = "SELECT AUTHOR FROM POSTS WHERE POST_ID=" + post_id + ";";
 	bool enter = false;
 	sqlite3_exec(db, check_exist.c_str(), DB_check_enter, (void*)&enter, 0);
-	post_user = post_username;
+	// post_user = post_username;
 
 	if (!enter) {
 		string not_exist = "Post does not exist.\n";
 		ret += not_exist;
 		// send(sockfd, not_exist.c_str(), not_exist.size(), 0);
-		return {ret, post_user};
+		return ret;
 	}
 
 	//Question comment have many space ex: hi!      hi!
@@ -412,5 +416,5 @@ pair<string, string> comment(int sockfd, vector<string> &argu) {
 	string succ_upd = "Comment successfully\n";
 	ret += succ_upd;
 	// send(sockfd, succ_upd.c_str(), succ_upd.size(), 0);
-	return {ret, post_user};
+	return ret;
 }

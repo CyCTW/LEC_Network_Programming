@@ -24,6 +24,7 @@ using namespace std;
 unordered_map<int, string> online; //fd, username, check if a user is now online
 unordered_map<string, string> user_bucket_tb;
 unordered_map<string, int> user_mailid;
+unordered_map<int, string> postid_name;
 int POST_ID = 1;
 string post_username;
 sqlite3 *db;
@@ -51,12 +52,13 @@ string delete_mail_format = "delete-mail <mail#>\n";
 
 static int DB_check_enter(void *enter, int argc, char **argv, char **colname) {
 	*(bool*)enter = true; 
-	if (colname[argc-1] == "AUTHOR") {
-		post_username = argv[argc-1];
-	}
+	// if (colname[argc-1] == "AUTHOR") {
+	// 	post_username = argv[argc-1];
+	// }
 	return 0;
 }
 string glo_ret;
+int id_idx = 1;
 
 static int DB_list_data(void *enter, int argc, char **argv, char **colname) {
 	// pair<int, bool >* fd_enter= (pair<int, bool >*)fd;
@@ -71,8 +73,9 @@ static int DB_list_data(void *enter, int argc, char **argv, char **colname) {
 			arg = arg.substr(5);
 			arg.replace(2, 1, "/");
 		}
-		s += arg; 
-		lens = 10 - arg.size();
+
+        s += arg; 
+   		lens = 10 - arg.size();
 		while(lens > 0) {
 			s += ' ';
 			lens--;

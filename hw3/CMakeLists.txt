@@ -14,6 +14,7 @@ add_executable(client client.cpp)
 
 
 target_compile_features(client PUBLIC cxx_std_11)
+
 target_link_libraries(client ${AWSSDK_LINK_LIBRARIES})
 
 	

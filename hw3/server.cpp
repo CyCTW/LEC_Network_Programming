@@ -16,12 +16,12 @@ int main(int argc, char *argv[]) {
 
 	struct stat bufr;
 	bool exist = true;
-	if (stat("mydb.db", &bufr) == -1) {
+	if (stat("mydbf.db", &bufr) == -1) {
 		exist = false;
 	}
 	// Create Database in memory. (temporary)
 	int st;
-	st = sqlite3_open("mydb.db", &db);
+	st = sqlite3_open(":memory:", &db);
 	if (st) {
 		printf("Can't open database \n");
 	}
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 							"DATE TEXT NOT NULL);";
 		string mail_table = "CREATE TABLE MAILS ("\
 							"TO_USER TEXT NOT NULL,"\
-							"MAILID INTEGER NOT NULL, "\
+							"MAILID INTEGER NOT NULL,"\
 							"SUBJECT TEXT NOT NULL, "\
 							"FROM_USER TEXT NOT NULL, "\
 							"DATE TEXT NOT NULL);";
@@ -92,7 +92,6 @@ int main(int argc, char *argv[]) {
 	}
 	
 	listen(sockfd, 5);
-	int lis_st, n;
 
 	fd_set master, read_fds;
 	int fdmax = sockfd;
@@ -254,7 +253,7 @@ int main(int argc, char *argv[]) {
 							if (ret[0] == 'A') {
 								recv(i, c_buf, 255, 0);
 								// give bucket_name
-								string user_name = online[i];
+								string user_name = postid_name[atoi(argu[1].c_str())];
 								string bucket_name = user_bucket_tb[ user_name ];
 								cout << "bucket_name: " << bucket_name << '\n';
 								send(i, bucket_name.c_str(), bucket_name.size(), 0);
@@ -294,8 +293,7 @@ int main(int argc, char *argv[]) {
 							}
 						}
 						else if( argu[0] == "comment") {
-							auto res = comment(i, argu);
-							ret += res.first;
+							ret += comment(i, argu);
 							ret += "% ";
 							send(i, ret.c_str(), ret.size(), 0);
 
@@ -304,8 +302,9 @@ int main(int argc, char *argv[]) {
 							if (ret[0] == 'C') {
 								recv(i, c_buf, 255, 0);
 								// give bucket_name
-								string user_name = res.second;
-								string bucket_name = user_bucket_tb[ user_name ];
+								string user_name = online[i];
+								string postuser_name = postid_name[atoi(argu[1].c_str())];
+								string bucket_name = user_bucket_tb[ postuser_name ];
 								cout << "bucket_name: " << bucket_name << '\n';
 								string msg = user_name + ' ' + bucket_name;
 								send(i, msg.c_str(), msg.size(), 0);

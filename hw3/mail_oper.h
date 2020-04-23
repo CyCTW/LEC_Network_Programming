@@ -15,8 +15,9 @@ string mail_to(int sockfd, vector<string> &argu) {
 	}
 
 	string user_name;
-    if ( !check_online(sockfd, user_name, ret) )
+    if ( !check_online(sockfd, user_name, ret) ) {
         return ret;
+    }
 
 	string recv_user = argu[1];
 	string subject;
@@ -123,8 +124,13 @@ string delete_mail(int sockfd, vector<string> &argu) {
 		return ret;
 	}
 	else {
+    	user_mailid[user_name]--;
 		string delete_mail = "DELETE FROM MAILS WHERE MAILID=" + mail_id + " AND TO_USER='" + user_name + "';";
 		sqlite3_exec(db, delete_mail.c_str(), 0, 0, 0);
+        for(int i=0; i<user_mailid[user_name]; i++) {
+            string update_id = "UPDATE MAILS SET MAILID=" + to_string(i+1) + " WHERE TO_USER= '" + user_name + "' LIMIT 1 OFFSET " + to_string(i) +";";
+            sqlite3_exec(db, update_id.c_str(), 0, 0, 0);
+        }
 		ret += "Mail deleted.\n";
 		return ret;
 	}

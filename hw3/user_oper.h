@@ -55,7 +55,7 @@ string login(int sockfd, vector<string> &argu) {
 			// send(sockfd, tmp.c_str(), tmp.size(), 0);
 		}
 		else {
-			string tmp = "Welcome, " + usern + '\n';
+			string tmp = "Welcome, " + usern + ".\n";
 			online[sockfd] = usern;
 			ret += tmp;
 			// send(sockfd, tmp.c_str(), tmp.size(), 0);
@@ -77,7 +77,7 @@ string logout(int sockfd, vector<string> &argu) {
     if ( !check_online(sockfd, user_name, ret) )
         return ret;
 	
-    string tmp = "Bye, " + online[sockfd] + '\n';
+    string tmp = "Bye, " + online[sockfd] + ".\n";
     online.erase(sockfd);
     ret += tmp;
     // send(sockfd, tmp.c_str(), tmp.size(), 0);

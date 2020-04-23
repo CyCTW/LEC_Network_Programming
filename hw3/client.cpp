@@ -222,11 +222,11 @@ void find_br(string &content) {
 
 
 int main(int argc, char const **argv) {
-	if(argc != 2) {
-		cerr<<"Wrong format. Should be " << argv[0] <<  "{PORT}.\n";
+	if(argc !=3) {
+		cerr<<"Wrong format. Should be " << argv[0] <<  " {HOST} {PORT}.\n";
 		return -1;
 	}
-	int portnum = atoi(argv[1]);
+	int portnum = atoi(argv[2]);
 	
 	struct sockaddr_in serv_addr;
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -256,6 +256,7 @@ int main(int argc, char const **argv) {
 	string buf_str = string(buff);
 	cout << buf_str;
 	int postId = 0;
+	int key_idx = 898;
 
 	while(true) {
 		
@@ -296,7 +297,6 @@ int main(int argc, char const **argv) {
 		if (recv_state(recv_st) == -1) return -1;
 
 		string buf_str = string(buf);
-		int key_idx = 898;
 
 		Aws::SDKOptions options;
 		Aws::InitAPI(options);
@@ -399,8 +399,8 @@ int main(int argc, char const **argv) {
 					// write file first
 					ofstream f;
 
-					cout << post_name << '\n';
-					cout << bucket_name << '\n';
+					// cout << post_name << '\n';
+					// cout << bucket_name << '\n';
 					f.open(post_name);
 
 					// deal with content
@@ -439,16 +439,17 @@ int main(int argc, char const **argv) {
 				ofstream f;
 				string post_name = "NP_HW3_POST_" + post_id;
 
-				cout << post_name << '\n';
-				cout << bucket_name << '\n';
+				// cout << post_name << '\n';
+				// cout << bucket_name << '\n';
 				f.open(post_name, std::ios_base::app);
 
-				// deal with content
+				// deal with comment
 				int pos = input.find(argu[2]);
-				string content = user_name + ": " + input.substr(pos);
-				find_br(content);
+				string comment = user_name + ": " + input.substr(pos);
+				find_br(comment);
+				f << comment;
 				f << '\n';
-				f << content;
+
 				f.close();
 				upload_awsObject(bucket_name, post_name);
 			}
